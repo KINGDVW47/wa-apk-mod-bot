@@ -1,0 +1,6 @@
+node_modules/
+session/
+output/
+uploads/
+*.apk
+.env

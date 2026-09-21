@@ -1,0 +1,18 @@
+{
+  "name": "wa-apk-mod-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp pou mod APK - Baileys + dashboard",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.16",
+    "axios": "^1.7.9",
+    "express": "^4.21.2",
+    "pino": "^9.5.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

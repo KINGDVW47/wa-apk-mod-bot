@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaliBuddy WA - Dashboard</title>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --accent:#25d366; --red:#ef4444; --text:#e5e7eb; --muted:#9ca3af; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,Segoe UI,Roboto,sans-serif; padding:24px; }
+  h1 { font-size:22px; margin-bottom:4px; }
+  .sub { color:var(--muted); margin-bottom:24px; font-size:14px; }
+  .card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .status { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+  .dot.off { background:var(--red); }
+  .dot.wait { background:#f59e0b; }
+  .grid { display:grid; gap:12px; }
+  .row { display:flex; align-items:center; justify-content:space-between; padding:12px; background:#222633; border-radius:10px; }
+  .row .name { font-weight:500; }
+  .btn { border:none; border-radius:8px; padding:8px 16px; cursor:pointer; font-weight:600; color:#fff; }
+  .btn.on { background:var(--accent); }
+  .btn.off { background:#374151; }
+  .btn.rm { background:var(--red); padding:8px 12px; }
+  input { width:100%; padding:10px; border-radius:8px; border:1px solid #374151; background:#11141b; color:#fff; margin-bottom:10px; }
+  .pair-code { font-size:28px; letter-spacing:3px; font-weight:800; color:var(--accent); text-align:center; padding:12px; }
+  .muted { color:var(--muted); font-size:13px; }
+  button:hover { opacity:0.85; }
+</style>
+</head>
+<body>
+  <h1>🤖 BaliBuddy WA</h1>
+  <div class="sub">Dashboard kontwòl bot WhatsApp</div>
+
+  <div class="card">
+    <h3>Koneksyon</h3>
+    <div class="status"><span class="dot" id="dot"></span><span id="conn-text">Chaje...</span></div>
+  </div>
+
+  <div class="card">
+    <h3>🔗 Konekte (Pairing Code)</h3>
+    <p class="muted">Antre nimewo WhatsApp (avèk kòd peyi, pa egz. 509xxxxxxxx) pou jwenn pairing code.</p>
+    <input id="phone" placeholder="509xxxxxxxx" />
+    <button class="btn on" onclick="pair()">Mande Pairing Code</button>
+    <div id="pair-result"></div>
+  </div>
+
+  <div class="card">
+    <h3>📋 Gwoup</h3>
+    <div class="grid" id="groups">Chaje...</div>
+  </div>
+
+<script>
+async function loadStatus() {
+  const r = await fetch('/api/status').then(x=>x.json());
+  const c = r.conn;
+  const dot = document.getElementById('dot');
+  const txt = document.getElementById('conn-text');
+  if (c.status === 'connected') { dot.className='dot'; txt.textContent = 'Konekte kòm ' + (c.phoneNumber||c.name||'?'); }
+  else if (c.status === 'waiting_qr' || c.status === 'waiting_pair') { dot.className='dot wait'; txt.textContent = 'Ap tann koneksyon...'; }
+  else { dot.className='dot off'; txt.textContent = 'Dekonekte' + (c.error? ' — '+c.error:''); }
+}
+async function loadGroups() {
+  const r = await fetch('/api/groups').then(x=>x.json());
+  const el = document.getElementById('groups');
+  if (!r.groups.length) { el.innerHTML = '<span class="muted">Okenn gwoup ankò.</span>'; return; }
+  el.innerHTML = r.groups.map(g => `
+    <div class="row">
+      <span class="name">${g.name}</span>
+      <span>
+        <button class="btn ${g.enabled?'on':'off'}" onclick="toggle('${g.jid}')">${g.enabled?'Aktif':'Enaktif'}</button>
+        <button class="btn rm" onclick="remove('${g.jid}')">✕</button>
+      </span>
+    </div>`).join('');
+}
+async function toggle(jid) { await fetch(`/api/groups/${jid}/toggle`, {method:'POST'}); loadGroups(); }
+async function remove(jid) { await fetch(`/api/groups/${jid}/remove`, {method:'POST'}); loadGroups(); }
+async function pair() {
+  const phone = document.getElementById('phone').value;
+  const el = document.getElementById('pair-result');
+  el.innerHTML = '<span class="muted">Ap mande...</span>';
+  const r = await fetch('/api/pair', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone})}).then(x=>x.json());
+  if (r.ok) el.innerHTML = `<div class="pair-code">${r.pairingCode}</div><p class="muted">Antre kòd sa a sou aparèy: WhatsApp → Linked devices → Link with phone number.</p>`;
+  else el.innerHTML = `<span class="muted">${r.msg || r.error || 'echwe'}</span>`;
+}
+loadStatus(); loadGroups();
+setInterval(()=>{loadStatus(); loadGroups();}, 5000);
+</script>
+</body>
+</html>
