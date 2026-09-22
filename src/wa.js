@@ -108,6 +108,7 @@ async function connect() {
 }
 
 // Mande yon pairing code pou nimewo (si WhatsApp sipòte li)
+// Re-ese otomatikman plizyè fwa si sokè a poko pare.
 // Retoune: { ok: true, code } oswa { ok: false, error }
 async function requestPairingCode(sock, phoneNumber) {
   const phone = cleanPhone(phoneNumber);
@@ -126,41 +127,44 @@ async function requestPairingCode(sock, phoneNumber) {
     return { ok: false, error: 'Bot deja konekte.' };
   }
 
-  try {
-    setConnState({ status: 'waiting_pair', pairMode: true, pairingCode: null, phoneNumber: phone, error: null });
+  setConnState({ status: 'waiting_pair', pairMode: true, pairingCode: null, phoneNumber: phone, error: null });
 
-    // Baileys: request pairing code — resi depi nimewo a sipòte sa
-    let code = null;
+  // Eseye jiska 5 fwa ak yon ti tann; sokè Baileys pafwa poko pare nan premye segond yo
+  const MAX_TRY = 5;
+  let lastErr = null;
+
+  for (let i = 1; i <= MAX_TRY; i++) {
     try {
-      code = await s.requestPairingCode(phone);
-    } catch (e) {
-      // Baileys ka voye erè; nou kaptire mesaj vrè a pou n ka montre l
-      const raw = (e && (e.message || e.output?.payload?.message)) || String(e && e.stack || e);
-      console.error('[wa] requestPairingCode te echwe:', raw);
-
-      // Si erè a se "Connection Closed" oswa sokè poko pare, eseye remonte sokè a
-      if (/closed|close|not open|unauthorized|401/i.test(raw)) {
-        setConnState({ pairMode: false });
-        return { ok: false, error: 'Sokè pa nan bon eta pou pairing. Re-ese nan kèk segond.' };
+      // Preferab yon eta 'connecting' oswa 'waiting_qr' — requestPairingCode bezwen sokè vivan
+      const code = await s.requestPairingCode(phone);
+      if (code) {
+        setConnState({ pairMode: true, pairingCode: code, status: 'waiting_pair', error: null });
+        console.log('\n🔢 Pairing code ou: ' + code);
+        console.log('Antre kòd sa a sou aparèy ou: WhatsApp → Linked devices → Link with phone number.\n');
+        return { ok: true, code };
       }
-      setConnState({ pairMode: false });
-      return { ok: false, error: raw || 'Pairing code pa sipòte pou nimewo sa a.' };
+      // pa gen code — eseye ankò
+      lastErr = 'Pa gen kòd ankò.';
+    } catch (e) {
+      const raw = (e && (e.message || e.output?.payload?.message)) || String(e && e.stack || e);
+      console.error('[wa] requestPairingCode eseye ' + i + '/' + MAX_TRY + ' →', raw);
+      lastErr = raw;
+
+      // Si se yon rezon pèmanan (nimewo enskri, 401, banned), sispann imedyatman
+      if (/forbidden|unauthorized|401|403|banned|exists|already|registered|invalid phone/i.test(raw)) {
+        setConnState({ pairMode: false, error: raw });
+        return { ok: false, error: raw };
+      }
     }
 
-    if (code) {
-      setConnState({ pairMode: true, pairingCode: code, status: 'waiting_pair' });
-      console.log('\n🔢 Pairing code ou: ' + code);
-      console.log('Antre kòd sa a sou aparèy ou: WhatsApp → Linked devices → Link with phone number.\n');
-      return { ok: true, code };
+    // Tann yon ti moman anvan pwochen eseye (sèlman si gen plis eseye)
+    if (i < MAX_TRY) {
+      await new Promise(r => setTimeout(r, 2500));
     }
-
-    // Pa gen code — swa QR sèl fason
-    setConnState({ pairMode: false, error: 'Pairing code pa disponib; sèvi ak QR.' });
-    return { ok: false, error: 'Pairing code pa disponib; sèvi ak QR.' };
-  } catch (e) {
-    setConnState({ pairMode: false });
-    return { ok: false, error: String(e && e.message || e) };
   }
+
+  setConnState({ pairMode: false, error: lastErr || 'Pairing code pa disponib; sèvi ak QR.' });
+  return { ok: false, error: lastErr || 'Pairing code pa disponib; sèvi ak QR.' };
 }
 
 module.exports = { connect, requestPairingCode, cleanPhone, getConnState, setConnState };
