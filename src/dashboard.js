@@ -1,7 +1,8 @@
-// Dashboard web — gade koneksyon + lis gwoup + bouton aktive/dezaktive
+// Dashboard web — gade koneksyon + QR + lis gwoup + bouton aktive/dezaktive
 // (Kòmantè an Kreyòl Ayisyen)
 const express = require('express');
 const path = require('path');
+const QRCode = require('qrcode');
 const wa = require('./wa');
 const stateMod = require('./state');
 const { serveStatic } = require('./dashboard_static');
@@ -11,12 +12,28 @@ function startDashboard(sock, state) {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Paj HTML statik (dashboard UI)
   serveStatic(app);
 
   // ----- API -----
   app.get('/api/status', (req, res) => {
     res.json({ conn: wa.getConnState() });
+  });
+
+  // QR kòm imaj (skan dirèk nan dashboard)
+  app.get('/api/qr', async (req, res) => {
+    const conn = wa.getConnState();
+    if (conn.status === 'connected') {
+      return res.json({ status: 'connected' });
+    }
+    if (!conn.qr) {
+      return res.json({ status: 'no_qr', pairingCode: conn.pairingCode || null });
+    }
+    try {
+      const dataUrl = await QRCode.toDataURL(conn.qr, { margin: 1, width: 320 });
+      res.json({ status: 'qr', image: dataUrl });
+    } catch (e) {
+      res.json({ status: 'no_qr', error: String(e.message) });
+    }
   });
 
   app.get('/api/groups', (req, res) => {
@@ -26,7 +43,6 @@ function startDashboard(sock, state) {
     res.json({ groups });
   });
 
-  // Bouton aktive/dezaktive depi dashboard
   app.post('/api/groups/:jid/toggle', (req, res) => {
     const jid = req.params.jid;
     const cur = state.activatedGroups[jid];
@@ -36,7 +52,6 @@ function startDashboard(sock, state) {
     res.json({ jid, enabled: cur.enabled });
   });
 
-  // Retire yon grup nèt
   app.post('/api/groups/:jid/remove', (req, res) => {
     const jid = req.params.jid;
     if (state.activatedGroups[jid]) {
@@ -46,7 +61,6 @@ function startDashboard(sock, state) {
     res.json({ ok: true });
   });
 
-  // Pairing code: mande kòd pou yon nimewo
   app.post('/api/pair', async (req, res) => {
     const phone = (req.body.phone || '').replace(/\D/g, '');
     if (!phone || phone.length < 8) {
@@ -57,7 +71,7 @@ function startDashboard(sock, state) {
       if (r && r.ok) {
         res.json({ ok: true, pairingCode: r.code });
       } else {
-        const err = (r && r.error) || 'Pairing code pa sipòte; skenne QR nan log yo.';
+        const err = (r && r.error) || 'Pairing code pa sipòte; skenne QR nan paj sa a.';
         res.json({ ok: false, msg: err });
       }
     } catch (e) {

@@ -3,88 +3,209 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BaliBuddy WA - Dashboard</title>
+<title>BaliBuddy WA — Panel Admin</title>
 <style>
-  :root { --bg:#0f1117; --card:#1a1d27; --accent:#25d366; --red:#ef4444; --text:#e5e7eb; --muted:#9ca3af; }
+  :root {
+    --bg:#07090f; --bg2:#0d1020; --card:#141829; --card2:#1b2036;
+    --border:#252b45; --accent:#25d366; --accent2:#128c7e;
+    --blue:#38bdf8; --red:#ef4444; --amber:#f59e0b;
+    --text:#eef2ff; --muted:#8b94ad;
+  }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--text); font-family:-apple-system,Segoe UI,Roboto,sans-serif; padding:24px; }
-  h1 { font-size:22px; margin-bottom:4px; }
-  .sub { color:var(--muted); margin-bottom:24px; font-size:14px; }
-  .card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:16px; }
-  .status { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
-  .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
-  .dot.off { background:var(--red); }
-  .dot.wait { background:#f59e0b; }
-  .grid { display:grid; gap:12px; }
-  .row { display:flex; align-items:center; justify-content:space-between; padding:12px; background:#222633; border-radius:10px; }
-  .row .name { font-weight:500; }
-  .btn { border:none; border-radius:8px; padding:8px 16px; cursor:pointer; font-weight:600; color:#fff; }
-  .btn.on { background:var(--accent); }
-  .btn.off { background:#374151; }
-  .btn.rm { background:var(--red); padding:8px 12px; }
-  input { width:100%; padding:10px; border-radius:8px; border:1px solid #374151; background:#11141b; color:#fff; margin-bottom:10px; }
-  .pair-code { font-size:28px; letter-spacing:3px; font-weight:800; color:var(--accent); text-align:center; padding:12px; }
-  .muted { color:var(--muted); font-size:13px; }
-  button:hover { opacity:0.85; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 20% -10%, rgba(37,211,102,.12), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgba(56,189,248,.10), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height:100vh; padding:20px;
+  }
+  .wrap { max-width:760px; margin:0 auto; }
+
+  /* Header */
+  .header { text-align:center; padding:22px 16px 26px; }
+  .logo { width:64px; height:64px; margin:0 auto 12px; border-radius:18px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex; align-items:center; justify-content:center; font-size:32px;
+    box-shadow:0 8px 30px rgba(37,211,102,.35); }
+  .header h1 { font-size:26px; font-weight:800; letter-spacing:-.5px; }
+  .header .sub { color:var(--muted); font-size:14px; margin-top:4px; }
+
+  /* Card base */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:20px; margin-bottom:16px; box-shadow:0 4px 20px rgba(0,0,0,.25); }
+  .card h3 { font-size:15px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .card h3 .ic { font-size:17px; }
+
+  /* Status pill */
+  .status-pill { display:inline-flex; align-items:center; gap:9px; padding:10px 16px;
+    border-radius:999px; font-weight:600; font-size:14px; background:var(--card2); border:1px solid var(--border); }
+  .dot { width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px currentColor; }
+  .dot.on { background:var(--accent); color:var(--accent); }
+  .dot.wait { background:var(--amber); color:var(--amber); }
+  .dot.off { background:var(--red); color:var(--red); }
+
+  /* Stats row */
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; text-align:center; }
+  .stat .num { font-size:26px; font-weight:800; }
+  .stat .lbl { color:var(--muted); font-size:12px; margin-top:3px; }
+
+  /* Inputs & buttons */
+  input { width:100%; padding:13px 14px; border-radius:11px; border:1px solid var(--border);
+    background:var(--bg2); color:var(--text); font-size:15px; margin-bottom:12px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  .btn { border:none; border-radius:11px; padding:12px 16px; cursor:pointer; font-weight:700;
+    font-size:14px; color:#04130a; transition:.15s; }
+  .btn:active { transform:scale(.98); }
+  .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; width:100%; }
+  .btn.primary:hover { filter:brightness(1.08); }
+  .btn.toggle-on { background:var(--accent); color:#04130a; }
+  .btn.toggle-off { background:#2a3048; color:var(--text); }
+  .btn.danger { background:transparent; color:var(--red); border:1px solid var(--red); padding:8px 12px; }
+
+  /* Pair code display */
+  .pair-code { font-size:34px; letter-spacing:6px; font-weight:800; color:var(--accent);
+    text-align:center; padding:16px; background:var(--bg2); border-radius:12px; margin-top:12px;
+    border:1px dashed var(--accent); }
+  .qr-box { text-align:center; margin-top:12px; }
+  .qr-box img { width:220px; height:220px; border-radius:14px; background:#fff; padding:8px; }
+  .hint { color:var(--muted); font-size:13px; line-height:1.5; }
+  .msg { margin-top:12px; font-size:13px; padding:10px 12px; border-radius:9px; }
+  .msg.err { background:rgba(239,68,68,.12); color:#fca5a5; }
+  .msg.ok { background:rgba(37,211,102,.12); color:#86efac; }
+
+  /* Group rows */
+  .group-row { display:flex; align-items:center; gap:12px; padding:13px; background:var(--card2);
+    border-radius:12px; margin-bottom:10px; }
+  .group-ava { width:40px; height:40px; border-radius:11px; flex-shrink:0;
+    background:linear-gradient(135deg,#6c7cf0,#8b5cf6); display:flex; align-items:center;
+    justify-content:center; font-weight:800; font-size:17px; color:#fff; }
+  .group-info { flex:1; min-width:0; }
+  .group-info .name { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .group-info .jid { color:var(--muted); font-size:11px; }
+  .actions { display:flex; gap:7px; }
+  .empty { color:var(--muted); text-align:center; padding:24px; font-size:14px; }
+
+  .footer { text-align:center; color:var(--muted); font-size:12px; padding:14px; }
+  @media (max-width:520px){ .stats{grid-template-columns:repeat(3,1fr);} .stat .num{font-size:21px;} }
 </style>
 </head>
 <body>
-  <h1>🤖 BaliBuddy WA</h1>
-  <div class="sub">Dashboard kontwòl bot WhatsApp</div>
+<div class="wrap">
 
-  <div class="card">
-    <h3>Koneksyon</h3>
-    <div class="status"><span class="dot" id="dot"></span><span id="conn-text">Chaje...</span></div>
+  <div class="header">
+    <div class="logo">🤖</div>
+    <h1>BaliBuddy WA</h1>
+    <div class="sub">Panel admin • bot WhatsApp mod APK</div>
   </div>
 
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="num" id="stat-groups" style="color:var(--blue)">0</div><div class="lbl">Gwoup Aktif</div></div>
+    <div class="stat"><div class="num" id="stat-total" style="color:var(--accent)">0</div><div class="lbl">Total Gwoup</div></div>
+    <div class="stat"><div class="num" id="stat-status" style="color:var(--amber)">—</div><div class="lbl">Eta</div></div>
+  </div>
+
+  <!-- Connection -->
   <div class="card">
-    <h3>🔗 Konekte (Pairing Code)</h3>
-    <p class="muted">Antre nimewo WhatsApp (avèk kòd peyi, pa egz. 509xxxxxxxx) pou jwenn pairing code.</p>
-    <input id="phone" placeholder="509xxxxxxxx" />
-    <button class="btn on" onclick="pair()">Mande Pairing Code</button>
+    <h3><span class="ic">📡</span> Koneksyon</h3>
+    <div class="status-pill"><span class="dot" id="dot"></span><span id="conn-text">Chaje...</span></div>
+  </div>
+
+  <!-- Pairing -->
+  <div class="card">
+    <h3><span class="ic">🔗</span> Konekte (Pairing Code)</h3>
+    <p class="hint">Antre nimewo WhatsApp (avèk kòd peyi, pa egz. 509xxxxxxxx) pou jwenn yon pairing code — oswa skanne QR a anba a dirèkteman.</p>
+    <input id="phone" placeholder="509xxxxxxxx" inputmode="numeric" />
+    <button class="btn primary" onclick="pair()">Mande Pairing Code</button>
     <div id="pair-result"></div>
+    <div class="qr-box" id="qr-box" style="display:none;">
+      <img id="qr-img" alt="QR" />
+      <p class="hint" style="margin-top:10px;">Skane QR a: WhatsApp → Linked devices → Link a device</p>
+    </div>
   </div>
 
+  <!-- Groups -->
   <div class="card">
-    <h3>📋 Gwoup</h3>
-    <div class="grid" id="groups">Chaje...</div>
+    <h3><span class="ic">👥</span> Gwoup</h3>
+    <div id="groups">Chaje...</div>
   </div>
+
+  <div class="footer">BaliBuddy WA • kouri 24/7 sou Railway</div>
+</div>
 
 <script>
+const $ = id => document.getElementById(id);
+
 async function loadStatus() {
   const r = await fetch('/api/status').then(x=>x.json());
   const c = r.conn;
-  const dot = document.getElementById('dot');
-  const txt = document.getElementById('conn-text');
-  if (c.status === 'connected') { dot.className='dot'; txt.textContent = 'Konekte kòm ' + (c.phoneNumber||c.name||'?'); }
-  else if (c.status === 'waiting_qr' || c.status === 'waiting_pair') { dot.className='dot wait'; txt.textContent = 'Ap tann koneksyon...'; }
-  else { dot.className='dot off'; txt.textContent = 'Dekonekte' + (c.error? ' — '+c.error:''); }
+  const dot = $('dot'), txt = $('conn-text');
+  if (c.status === 'connected') {
+    dot.className='dot on'; txt.textContent = '✅ Konekte kòm ' + (c.phoneNumber||c.name||'?');
+  } else if (c.status === 'waiting_qr' || c.status === 'waiting_pair') {
+    dot.className='dot wait'; txt.textContent = '⏳ Ap tann koneksyon...';
+  } else {
+    dot.className='dot off'; txt.textContent = '❌ Dekonekte' + (c.error ? ' — '+c.error : '');
+  }
+  $('stat-status').textContent = c.status === 'connected' ? 'OK' : 'OFF';
 }
+
+async function loadQR() {
+  try {
+    const r = await fetch('/api/qr').then(x=>x.json());
+    if (r.status === 'qr' && r.image) {
+      $('qr-img').src = r.image;
+      $('qr-box').style.display = 'block';
+    } else {
+      $('qr-box').style.display = 'none';
+    }
+  } catch (e) {}
+}
+
 async function loadGroups() {
   const r = await fetch('/api/groups').then(x=>x.json());
-  const el = document.getElementById('groups');
-  if (!r.groups.length) { el.innerHTML = '<span class="muted">Okenn gwoup ankò.</span>'; return; }
-  el.innerHTML = r.groups.map(g => `
-    <div class="row">
-      <span class="name">${g.name}</span>
-      <span>
-        <button class="btn ${g.enabled?'on':'off'}" onclick="toggle('${g.jid}')">${g.enabled?'Aktif':'Enaktif'}</button>
-        <button class="btn rm" onclick="remove('${g.jid}')">✕</button>
-      </span>
-    </div>`).join('');
+  const el = $('groups');
+  const active = r.groups.filter(g=>g.enabled).length;
+  $('stat-groups').textContent = active;
+  $('stat-total').textContent = r.groups.length;
+  if (!r.groups.length) { el.innerHTML = '<div class="empty">Okenn gwoup ankò.<br>Lè bot la nan yon grup, tape <b>/aktive</b> la pou li parèt isit la.</div>'; return; }
+  el.innerHTML = r.groups.map(g => {
+    const initial = (g.name || '?').trim().charAt(0).toUpperCase();
+    return `<div class="group-row">
+      <div class="group-ava">${initial}</div>
+      <div class="group-info">
+        <div class="name">${g.name}</div>
+        <div class="jid">${g.jid}</div>
+      </div>
+      <div class="actions">
+        <button class="btn ${g.enabled?'toggle-on':'toggle-off'}" onclick="toggle('${g.jid}')">${g.enabled?'✅ Aktif':'⚪ Enaktif'}</button>
+        <button class="btn danger" onclick="remove('${g.jid}')" title="Retire">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
+
 async function toggle(jid) { await fetch(`/api/groups/${jid}/toggle`, {method:'POST'}); loadGroups(); }
-async function remove(jid) { await fetch(`/api/groups/${jid}/remove`, {method:'POST'}); loadGroups(); }
+async function remove(jid) { if(confirm('Retire gwoup sa a?')){ await fetch(`/api/groups/${jid}/remove`, {method:'POST'}); loadGroups(); } }
+
 async function pair() {
-  const phone = document.getElementById('phone').value;
-  const el = document.getElementById('pair-result');
-  el.innerHTML = '<span class="muted">Ap mande...</span>';
+  const phone = $('phone').value;
+  const el = $('pair-result');
+  el.innerHTML = '<div class="msg">Ap mande pairing code...</div>';
   const r = await fetch('/api/pair', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone})}).then(x=>x.json());
-  if (r.ok) el.innerHTML = `<div class="pair-code">${r.pairingCode}</div><p class="muted">Antre kòd sa a sou aparèy: WhatsApp → Linked devices → Link with phone number.</p>`;
-  else el.innerHTML = `<span class="muted">${r.msg || r.error || 'echwe'}</span>`;
+  if (r.ok) {
+    el.innerHTML = `<div class="pair-code">${r.pairingCode}</div>
+      <p class="hint" style="margin-top:10px;">📱 Antre kòd sa a sou aparèy ou:<br>WhatsApp → Linked devices → Link with phone number.</p>`;
+  } else {
+    el.innerHTML = `<div class="msg err">${r.msg || r.error || 'echwe'}</div>`;
+  }
 }
-loadStatus(); loadGroups();
-setInterval(()=>{loadStatus(); loadGroups();}, 5000);
+
+loadStatus(); loadGroups(); loadQR();
+setInterval(()=>{ loadStatus(); loadGroups(); loadQR(); }, 5000);
 </script>
 </body>
 </html>
