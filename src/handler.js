@@ -13,6 +13,22 @@ const WORK_ROOT = '/tmp/wamod';
 
 function normJid(jid) { return (jid || '').split('@')[0]; }
 
+const ALL_PATCHES = ['plan', 'credit', 'token', 'lvl', 'ads', 'root', 'signature'];
+
+// Konfigirasyon patch pou chak gwoup (default: tout aktif)
+function getGroupPatches(state, jid) {
+  const g = state.activatedGroups[jid];
+  if (g && g.patches) return { ...g.patches };
+  return { plan: true, credit: true, token: true, lvl: true, ads: true, root: true, signature: true };
+}
+
+function setGroupPatch(state, jid, patch, val) {
+  const g = state.activatedGroups[jid] || (state.activatedGroups[jid] = { name: jid, enabled: true });
+  if (!g.patches) g.patches = getGroupPatches(state, jid);
+  g.patches[patch] = val;
+  stateMod.save(state);
+}
+
 function isGroupMsg(msg) {
   return !!(msg.key && msg.key.remoteJid && msg.key.remoteJid.endsWith('@g.us'));
 }
@@ -70,7 +86,8 @@ async function handleMessage(sock, msg, state) {
     const buf = await downloadMediaMessage(msg, 'buffer', {});
     fs.writeFileSync(tmpIn, buf);
 
-    const result = await runModPipeline(tmpIn, normJid(jid));
+    const patches = getGroupPatches(state, jid);
+  const result = await runModPipeline(tmpIn, normJid(jid), patches);
 
     if (result.ok && result.apkPath && fs.existsSync(result.apkPath)) {
       await sock.sendMessage(jid, { text: '✅ Mod fini! Men APK mod ou a 👇' });
@@ -134,6 +151,11 @@ async function handleCommand(sock, msg, state, text, jid) {
       }
       break;
 
+    case '/patch':
+    case '/patches':
+      await handlePatchCommand(sock, msg, state, cmd, arg, jid, text);
+      break;
+
     case '/ls':
       {
         const list = Object.entries(state.activatedGroups)
@@ -147,6 +169,32 @@ async function handleCommand(sock, msg, state, text, jid) {
     default:
       await sock.sendMessage(jid, { text: 'Kòmand enkoni. Tape /menu pou wè sa bot la ka fè.' });
   }
+}
+
+function patchLabel(p) {
+  const map = {
+    plan: 'Plan/VIP/Premium', credit: 'Kredi/Balance', token: 'Token',
+    lvl: 'LVL (lisans Google)', ads: 'Reklam (ads)', root: 'Root check', signature: 'Siyati',
+  };
+  return map[p] || p;
+}
+
+async function handlePatchCommand(sock, msg, state, cmd, arg, jid, text) {
+  const cur = getGroupPatches(state, jid);
+  // Pa gen agiman → montre lis patch + eta yo
+  if (!arg) {
+    const lines = ALL_PATCHES.map(p => (cur[p] ? '✅' : '❌') + ' ' + patchLabel(p) + ' — /patch ' + p).join('\n');
+    await sock.sendMessage(jid, { text: '🔧 *Patch ki aplike sou APK mod yo*\n\n' + lines + '\n\nTip: /patch <non> pou aktive/dezaktive (eg. /patch plan)' });
+    return;
+  }
+  const p = arg.toLowerCase().trim();
+  if (!ALL_PATCHES.includes(p)) {
+    await sock.sendMessage(jid, { text: '❌ Patch enkoni: ' + p + '.\nPatch ki disponib: ' + ALL_PATCHES.join(', ') });
+    return;
+  }
+  const newVal = !cur[p];
+  setGroupPatch(state, jid, p, newVal);
+  await sock.sendMessage(jid, { text: (newVal ? '✅' : '❌') + ' Patch *' + patchLabel(p) + '* kounye a ' + (newVal ? 'AKTIVE' : 'DEZAKTIVE en') + ' pou gwoup sa a.' });
 }
 
 async function sendMenu(sock, jid) {
@@ -183,6 +231,7 @@ const MENU_TEXT = `🤖 *BaliBuddy WA* — bot mod APK
 /dezaktive — dezaktive bot nan grup sa a
 /estati — wè eta koneksyon
 /ls — lis gwoup aktif
+/patch — aktive/dezaktive patch (plan, kredi, token, lvl, ads, root, siyati)
 /menu (oswa /help) — montre meni sa a
 
 *Kijan pou mod:*

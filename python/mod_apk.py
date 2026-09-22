@@ -2,16 +2,17 @@
 """
 mod_apk.py — Script Python endepandan pou modifikasyon APK (bot WhatsApp).
 
-Reutilize lojik apk-mod-bot la. Li fè:
+Li fè:
   1. dekonpile (apktool d)
   2. chanje non app (android:label)
   3. enjekte Toast nan onCreate() launcher
-  4. rekonstwi (apktool b)
-  5. zipalign
-  6. apksigner (siyen)
+  4. patch opsyonèl: plan, credit, token, lvl, ads, root, signature
+  5. rekonstwi (apktool b)
+  6. zipalign
+  7. apksigner (siyen)
 
 Itilizasyon:
-  python3 mod_apk.py <apk_entree> <out_dir> <uid>
+  python3 mod_apk.py <apk_entree> <out_dir> <uid> [--patch=plan] [--patch=credit] ...
 
 Lè siksè li ekri sou dènye liy: OK:<chemen_apk_final>
 (Kòmantè an Kreyòl Ayisyen)
@@ -22,9 +23,6 @@ import sys
 import shutil
 import subprocess
 import tempfile
-
-MEMORY_FILE = "/root/.bali_mod_name"
-
 
 # =============================================================================
 # Konfigirasyon
@@ -71,19 +69,24 @@ def _str_to_smali(s):
     return '"' + "".join(out) + '"'
 
 
+def _walk_smali_files(decompiled_dir):
+    """Itilize tout fichye .smali (nan tout smali*/ klas)."""
+    for root, dirs, files in os.walk(decompiled_dir):
+        for f in files:
+            if f.endswith(".smali"):
+                yield os.path.join(root, f)
+
+
 def find_launcher_class(decompiled_dir):
     manifest = os.path.join(decompiled_dir, "AndroidManifest.xml")
     if not os.path.exists(manifest):
         return None
     content = open(manifest, encoding="utf-8").read()
-    # Kaptire <activity ...> ouvèti a AK nimewo android:name li,
-    # epi kò a (ki gen intent-filter MAIN/LAUNCHER) separeman.
     blocks = re.findall(r"(<activity\b[^>]*>)(.*?)</activity>", content, re.DOTALL)
     for open_tag, body in blocks:
         if "android.intent.action.MAIN" in body and "android.intent.category.LAUNCHER" in body:
             m = re.search(r'android:name="([^"]+)"', open_tag)
             if m: return m.group(1)
-    # Fallback: alias aktivite
     for open_tag, body in blocks:
         if "android.intent.action.MAIN" in body:
             m = re.search(r'android:name="([^"]+)"', open_tag)
@@ -106,7 +109,7 @@ def class_to_smali(decompiled_dir, cls):
 
 
 # =============================================================================
-# Operasyon
+# Operasyon debaz
 # =============================================================================
 def change_app_name(decompiled_dir, new_name):
     manifest = os.path.join(decompiled_dir, "AndroidManifest.xml")
@@ -149,7 +152,6 @@ def inject_toast(decompiled_dir, msg):
     next_m = content.find(".method", start + 1)
     end = next_m if next_m != -1 else len(content)
     body = content[start:end]
-    # asire .locals >= 2
     lm = re.search(r"\.locals\s+(\d+)", body)
     if lm and int(lm.group(1)) < 2:
         nb = re.sub(r"\.locals\s+\d+", ".locals 2", body, count=1)
@@ -176,7 +178,6 @@ def inject_toast(decompiled_dir, msg):
 
 
 def ensure_keystore():
-    """Kreye keystore si li pa egziste."""
     if os.path.exists(KEYSTORE_PATH):
         return True
     d = os.path.dirname(KEYSTORE_PATH)
@@ -189,14 +190,232 @@ def ensure_keystore():
     return code == 0
 
 
+# =============================================================================
+# Motè patch (smali)
+# =============================================================================
+# Yon "prensip patching" = (non, regex_non_retou, kò nouvo).
+# Nou jwenn yon metòd ki matche "non" + "deskriptè retou", epi nou ranplase kò li
+# pou retounen yon valè "fòse" (true/false/konstan). Sa global pou tout APK.
+
+RETURN_PATTERNS = {
+    "plan": {
+        "names": [
+            "isPremium", "ispremium", "hasPremium", "isVip", "isvip", "hasVip",
+            "isPro", "ispro", "hasPro", "isSubscribed", "isSubscribe", "isMember",
+            "hasActiveSubscription", "checkSubscription", "isGold", "isSilver",
+            "getPlan", "isPlatinum", "hasPlan", "premiumEnabled",
+        ],
+        "returns_true": True,  # fòse retounen TRUE (gen plan/vip/premium)
+    },
+    "credit": {
+        "names": [
+            "getCredits", "getcredits", "getBalance", "getbalance", "getCoins",
+            "getcoins", "getPoints", "getpoints", "getDiamonds", "getGems",
+            "getMoney", "getCurrency", "getCash", "getCoinBalance", "myCredits",
+        ],
+        "value": 999999,  # fòse retounen gwo valè (retou ent sèlman)
+    },
+    "token": {
+        "names": [
+            "getToken", "gettokens", "isValidToken", "checkToken", "hasToken",
+            "tokenValid", "getAccessToken", "isTokenValid", "checkApiToken",
+        ],
+        "returns_true": True,  # token valab / prezan
+    },
+    "root": {
+        "names": [
+            "isRooted", "isrooted", "checkRoot", "isDeviceRooted", "detectRoot",
+            "isRootAvailable", "isRoot", "rootCheck",
+        ],
+        "returns_false": True,  # fòse retounen FO (pa gen root → pa bloke)
+    },
+    "signature": {
+        "names": [
+            "checkSignature", "isSignatureValid", "verifySignature", "isSignature",
+            "checkSign", "isSigned", "verifySign", "isAppVerified",
+        ],
+        "returns_true": True,  # siyati valab
+    },
+}
+
+# LVL — Lisans Google (com.android.vending.licensing.LicenseChecker)
+LVL_CHECKER_MARKER = "com/android/vending/licensing/LicenseChecker"
+LVL_ALLOWED = "com/android/vending/licensing/LicenseCheckerCallback;->ALLOWED"
+
+# Ads — Sèvi patèrn komen SDK reklam
+ADS_MARKERS = [
+    "com/google/android/gms/ads", "com/applovin", "com/unity3d/ads",
+    "com/ironsource", "com/vungle", "com/facebook/ads", "com/startapp",
+    "com/chartboost", "com/adcolony", "com/mintegral",
+]
+
+
+def _parse_methods(content):
+    """Retounen lis (start, end, header) pou chak .method nan yon fichye smali."""
+    res = []
+    for m in re.finditer(r"\.method\b", content):
+        # jwenn fen header (liy ki kòmanse ak '.end method' se fen kò, pa isit)
+        nl = content.find("\n", m.start())
+        header = content[m.start():nl if nl != -1 else m.start()+1]
+        res.append((m.start(), header))
+    # konstwi fen chak metòd
+    methods = []
+    for i, (start, header) in enumerate(res):
+        if i + 1 < len(res):
+            end = res[i + 1][0]
+        else:
+            end = len(content)
+        methods.append((start, end, header))
+    return methods
+
+
+def _force_return_true(body):
+    """Retounen yon nouvo kò metòd ki retounen TRUE (boolean)."""
+    regs = max(1, len(re.findall(r"\bp\d+", body)) )
+    return body, None
+
+
+def _patch_return(decompiled_dir, names, mode):
+    """Fòse metòd ki matche 'names' pou retounen yon valè fiks.
+
+    mode ∈ {True, False, int}
+    """
+    hits = 0
+    compiled = re.compile(r"\.method\b[^\n]*\b(" + "|".join(re.escape(n) for n in names) + r")\s*\(")
+    for sp in _walk_smali_files(decompiled_dir):
+        try:
+            content = open(sp, encoding="utf-8").read()
+        except Exception:
+            continue
+        changed = False
+        for m in list(compiled.finditer(content)):
+            start = m.start()
+            # jwenn fen metòd sa a (.end method)
+            end_m = content.find(".end method", m.end())
+            if end_m == -1:
+                continue
+            end = end_m + len(".end method")
+            # liy header a (liy ki kòmanse ak .method ...)
+            line_end = content.find("\n", m.start())
+            header = content[m.start():line_end if line_end != -1 else m.end()]
+            # Detèmine kalite retou apati deskriptè: '( ... )<retou>'
+            rtype = None
+            mm = re.search(r"\)([^\s;]+)", header)
+            if mm:
+                rtype = mm.group(1)
+            if mode is True and rtype != "Z":
+                continue
+            if mode is False and rtype != "Z":
+                continue
+            if (mode is not True and mode is not False) and rtype != "I":
+                continue
+            regs = re.search(r"\.registers\s+(\d+)", content[start:end])
+            nreg = int(regs.group(1)) if regs else 1
+            # bati nouvo kò (kenbe header antye, sèlman ranplase kò a)
+            # Header deja kòmanse nan 'start'; nou vle chanje soti nan fen header
+            # rive nan '.end method'.
+            body_start = start
+            body_end = end_m  # '.end method' (nou kite li)
+            # konstwi nouvo kò (ant header ak .end method)
+            if mode is True:
+                body = "\n    const/4 v0, 0x1\n    return v0\n"
+            elif mode is False:
+                body = "\n    const/4 v0, 0x0\n    return v0\n"
+            else:
+                val = int(mode)
+                body = "\n    const v0, 0x%x\n    return v0\n" % val
+            # Asire .registers oswa .locals nan header (deja la); nou pa touche header.
+            content = content[:line_end if line_end != -1 else m.end()] + body + content[end_m:]
+            hits += 1
+            changed = True
+            break  # sèlman yon metòd pa fwa pou senplisite
+        if changed:
+            try:
+                open(sp, "w", encoding="utf-8").write(content)
+            except Exception:
+                pass
+    return hits
+
+
+def _patch_lvl(decompiled_dir):
+    """Patch LVL: fòse funk callback ALLOWED nan LicenseChecker."""
+    hits = 0
+    for sp in _walk_smali_files(decompiled_dir):
+        try:
+            content = open(sp, encoding="utf-8").read()
+        except Exception:
+            continue
+        if LVL_CHECKER_MARKER not in content and "->allow" not in content:
+            continue
+        changed = False
+        # Chèche objè LicenserCheckerCallback ki resevwa paramèt (allow/disallow)
+        # metod ki gen deskriptè (...LicenserCheckerCallback;->allow(...)V) oswa
+        # 'allow(I)V' nan klas callback yo. Nou fòse li bay ALLOWED (0x0?).
+        # Pou simplicity: ranplase chak apèl 'deny'/'DONT_ALLOW' ak 'ALLOWED'.
+        for pat, repl in [
+            ("DONT_ALLOW", "ALLOWED"),
+            ("NOT_LICENSED", "ALLOWED"),
+        ]:
+            if pat in content:
+                content = content.replace(pat, repl)
+                changed = True
+                hits += content.count(pat)
+        if changed:
+            open(sp, "w", encoding="utf-8").write(content)
+    return hits
+
+
+def _patch_ads(decompiled_dir):
+    """Dezaktive reklam: retire/neutralize apèl pou montre reklam."""
+    hits = 0
+    ad_re = re.compile(r"invoke-(?:virtual|static|interface|direct)\s+\{.*?\},\s+(L[^;]*/[^;]*;)->(show|loadAd|displayAd|showInterstitial|loadInterstitial)\(.*\)")
+    for sp in _walk_smali_files(decompiled_dir):
+        try:
+            content = open(sp, encoding="utf-8").read()
+        except Exception:
+            continue
+        if not any(mk in content for mk in ADS_MARKERS):
+            continue
+        # retire liy 'show' / 'loadAd' yo (met nan kòmantè)
+        def repl(mobj):
+            return "# " + mobj.group(0)
+        content2, n = ad_re.subn(repl, content)
+        if n:
+            open(sp, "w", encoding="utf-8").write(content2)
+            hits += n
+    return hits
+
+
+PATCH_FUNCS = {
+    "plan": lambda d: _patch_return(d, RETURN_PATTERNS["plan"]["names"], True),
+    "credit": lambda d: _patch_return(d, RETURN_PATTERNS["credit"]["names"], RETURN_PATTERNS["credit"]["value"]),
+    "token": lambda d: _patch_return(d, RETURN_PATTERNS["token"]["names"], True),
+    "root": lambda d: _patch_return(d, RETURN_PATTERNS["root"]["names"], False),
+    "signature": lambda d: _patch_return(d, RETURN_PATTERNS["signature"]["names"], True),
+    "lvl": _patch_lvl,
+    "ads": _patch_ads,
+}
+
+
+# =============================================================================
+# Main
+# =============================================================================
 def main():
     if len(sys.argv) < 4:
-        sys.stdout.write("Itilizasyon: mod_apk.py <apk> <out_dir> <uid>\n")
+        sys.stdout.write("Itilizasyon: mod_apk.py <apk> <out_dir> <uid> [--patch=...]\n")
         sys.exit(1)
 
     apk_in = sys.argv[1]
     out_dir = sys.argv[2]
     uid = sys.argv[3]
+
+    # Lis patch mande
+    requested_patches = []
+    for a in sys.argv[4:]:
+        if a.startswith("--patch="):
+            p = a[len("--patch="):].strip().lower()
+            if p in PATCH_FUNCS:
+                requested_patches.append(p)
 
     if not os.path.exists(apk_in):
         sys.stdout.write("ERR: APK pa jwenn: %s\n" % apk_in)
@@ -209,14 +428,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     project = os.path.join(work, "app")
 
-    # Kesyon non aplikasyon an: nou pa mande itilizatè, nou sèvi ak yon
-    # etap senp: ajoute yon suffixe "★" pou make l kòm mod (ou ka chanje li).
-    # (Nan vèsyon konplè, bot la mande nouvo non an nan chat.)
     new_name = base[:40] + "★"
 
     try:
         # 1. Dekonpile
-        code, out, err = run_cmd([APKTOOL, "d", "-f", "-o", project, apk_in], timeout=1200)
+        code, out, err = run_cmd([APKTOOL, "d", "-f", "-o", project, apk_in], timeout=1500)
         if code != 0:
             sys.stdout.write("ERR: Dekonpilasyon echwe: %s\n" % err.strip()[-600:])
             sys.exit(3)
@@ -230,21 +446,30 @@ def main():
         # 3. Enjekte Toast
         r2 = inject_toast(project, "Mod by BaliBuddy ✓")
 
-        # 4. Rekonstwi
+        # 4. Aplike patch mande yo
+        patch_results = {}
+        for p in requested_patches:
+            try:
+                hits = PATCH_FUNCS[p](project)
+                patch_results[p] = hits
+            except Exception as e:
+                patch_results[p] = "err:" + str(e)
+
+        # 5. Rekonstwi
         unsigned = os.path.join(work, base + "_unsigned.apk")
-        code, out, err = run_cmd([APKTOOL, "b", project, "-o", unsigned], timeout=1200)
+        code, out, err = run_cmd([APKTOOL, "b", project, "-o", unsigned], timeout=1500)
         if code != 0:
             sys.stdout.write("ERR: Rekonstwi echwe: %s\n" % err.strip()[-600:])
             sys.exit(5)
 
-        # 5. zipalign
+        # 6. zipalign
         aligned = os.path.join(work, base + "_aligned.apk")
         code, _, err = run_cmd([ZIPALIGN, "-f", "4", unsigned, aligned], timeout=600)
         if code != 0:
             sys.stdout.write("ERR: zipalign echwe: %s\n" % err.strip()[-400:])
             sys.exit(6)
 
-        # 6. Siyen
+        # 7. Siyen
         if not ensure_keystore():
             sys.stdout.write("ERR: Pa ka kreye keystore\n")
             sys.exit(7)
@@ -255,6 +480,8 @@ def main():
             sys.stdout.write("ERR: Siyati echwe: %s\n" % err.strip()[-500:])
             sys.exit(8)
 
+        # Rezime patch sou dènye liy (apre OK pèdi — se konsa nou ekri yon blòk enfòmasyon)
+        sys.stdout.write("PATCHES:%s\n" % str(patch_results))
         sys.stdout.write("OK:%s\n" % final)
     finally:
         shutil.rmtree(work, ignore_errors=True)

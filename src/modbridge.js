@@ -8,18 +8,29 @@ const config = require('./config');
 
 const PY_SCRIPT = path.join(__dirname, '..', 'python', 'mod_apk.py');
 
-// Lanse mod pipeline Python
-function runModPipeline(apkPath, uid) {
+// Lanse mod pipeline Python (ak opsyon patch)
+// patches: objè tankou { plan: true, credit: true, token: true, ... }
+function runModPipeline(apkPath, uid, patches) {
   return new Promise((resolve) => {
     const outDir = path.resolve(config.OUTPUT_DIR);
     fs.mkdirSync(outDir, { recursive: true });
 
-    execFile('python3', [PY_SCRIPT, apkPath, outDir, uid || 'wa'],
-      { timeout: 15 * 60 * 1000, maxBuffer: 1024 * 1024 * 10 },
+    const args = [PY_SCRIPT, apkPath, outDir, uid || 'wa'];
+    // Ajoute patch yo kòm agiman --patch=...
+    if (patches && typeof patches === 'object') {
+      for (const [k, v] of Object.entries(patches)) {
+        if (v) args.push('--patch=' + k);
+      }
+    }
+
+    execFile('python3', args,
+      { timeout: 25 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 },
       (err, stdout, stderr) => {
         if (err) {
-          // Timeout oswa erè
-          resolve({ ok: false, msg: 'Mod echwe: ' + (err.killed ? 'tan ekspiré' : stderr.slice(-500) || err.message) });
+          // Timeout oswa erè. mod_apk.py ekri "ERR: ..." sou STDOUT,
+          // se pou sa nou montre stdout tou (pa sèlman stderr).
+          const reason = (stdout + '\n' + stderr).replace(/\s+/g, ' ').trim().slice(-700);
+          resolve({ ok: false, msg: 'Mod echwe: ' + (err.killed ? 'tan ekspiré (>25 min)' : reason || err.message) });
           return;
         }
         // Lè siksè, dènye liy stdout = chemen APK final
@@ -29,7 +40,7 @@ function runModPipeline(apkPath, uid) {
           const apkPath = last.slice(3).trim();
           resolve({ ok: true, apkPath, msg: 'siksè' });
         } else {
-          resolve({ ok: false, msg: (stdout + stderr).slice(-800) || 'Mod echwe (rezilta vid).' });
+          resolve({ ok: false, msg: (stdout + stderr).replace(/\s+/g, ' ').slice(-800) || 'Mod echwe (rezilta vid).' });
         }
       });
   });
