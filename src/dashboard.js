@@ -53,11 +53,15 @@ function startDashboard(sock, state) {
       return res.status(400).json({ error: 'Antre yon nimewo valid (avèk kòd peyi).' });
     }
     try {
-      const code = await wa.requestPairingCode(sock, phone);
-      if (code) res.json({ ok: true, pairingCode: code });
-      else res.json({ ok: false, msg: 'Pairing code pa sipòte; skenne QR nan log yo.' });
+      const r = await wa.requestPairingCode(sock, phone);
+      if (r && r.ok) {
+        res.json({ ok: true, pairingCode: r.code });
+      } else {
+        const err = (r && r.error) || 'Pairing code pa sipòte; skenne QR nan log yo.';
+        res.json({ ok: false, msg: err });
+      }
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: String(e && e.message || e) });
     }
   });
 
