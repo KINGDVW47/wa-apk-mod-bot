@@ -19,18 +19,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---- Android build-tools (aapt/aapt2/zipalign/apksigner) ----
 ENV BUILD_TOOLS_DIR=/opt/android-sdk/build-tools/android-14
 RUN mkdir -p ${BUILD_TOOLS_DIR} && \
-    curl -sL -o /tmp/bt.zip "https://dl.google.com/android/repository/build-tools_r34-linux.zip" && \
+    curl -fL --retry 5 --retry-delay 2 -o /tmp/bt.zip "https://dl.google.com/android/repository/build-tools_r34-linux.zip" && \
     unzip -q /tmp/bt.zip -d /tmp/bt && \
     cp /tmp/bt/android-14/aapt /tmp/bt/android-14/aapt2 /tmp/bt/android-14/zipalign /tmp/bt/android-14/apksigner ${BUILD_TOOLS_DIR}/ && \
     cp -r /tmp/bt/android-14/lib64 ${BUILD_TOOLS_DIR}/ && \
     rm -rf /tmp/bt /tmp/bt.zip
 
-# ---- apktool ----
-RUN curl -sL -o /usr/local/bin/apktool "https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar" && \
-    printf '#!/usr/bin/env bash\nexec java -jar /usr/local/bin/apktool "$@"\n' > /usr/local/bin/apktool-run && \
-    mv /usr/local/bin/apktool /usr/local/bin/apktool.jar && \
-    mv /usr/local/bin/apktool-run /usr/local/bin/apktool && \
-    chmod +x /usr/local/bin/apktool
+# ---- apktool (pou telechaje yon .jar valab, verifye li) ----
+ENV APKTOOL_VERSION=2.10.0
+RUN curl -fL --retry 5 --retry-delay 2 -o /tmp/apktool.jar \
+        "https://github.com/iBotPeaches/Apktool/releases/download/v${APKTOOL_VERSION}/apktool_${APKTOOL_VERSION}.jar" && \
+    mkdir -p /opt/apktool && \
+    mv /tmp/apktool.jar /opt/apktool/apktool.jar && \
+    printf '#!/usr/bin/env bash\nexec java -jar /opt/apktool/apktool.jar "$@"\n' > /usr/local/bin/apktool && \
+    chmod +x /usr/local/bin/apktool && \
+    echo "== Verifye apktool jar ==" && \
+    unzip -t /opt/apktool/apktool.jar | tail -1 && \
+    test -s /opt/apktool/apktool.jar && echo "apktool OK (<=valab .jar)"
 
 # ---- Wrapper cd pou build-tools (resoud $ORIGIN/../lib64 RUNPATH) ----
 RUN for b in zipalign aapt aapt2 apksigner; do \

@@ -396,6 +396,26 @@ PATCH_FUNCS = {
 # =============================================================================
 # Main
 # =============================================================================
+def verify_tools():
+    """Verifye tout zouti yo enstale epi yo mache. Retounen lis erè (vid = tout bon)."""
+    errors = []
+    # apktool dwe yon .jar valab
+    try:
+        code, out, err = run_cmd([APKTOOL, "--version"], timeout=60)
+        if code != 0 or not out.strip().startswith("2."):
+            errors.append("apktool pa valab: " + (err or out or "").strip()[-200:])
+    except FileNotFoundError:
+        errors.append("apktool pa jwenn nan PATH")
+    import shutil as _sh
+    for tool in (ZIPALIGN, APKSIGNER):
+        if not _sh.which(tool):
+            errors.append(tool + " pa jwenn nan PATH")
+    java = _sh.which("java")
+    if not java:
+        errors.append("java pa jwenn (apktool bezwen li)")
+    return errors
+
+
 def main():
     if len(sys.argv) < 4:
         sys.stdout.write("Itilizasyon: mod_apk.py <apk> <out_dir> <uid> [--patch=...]\n")
@@ -412,6 +432,12 @@ def main():
             p = a[len("--patch="):].strip().lower()
             if p in PATCH_FUNCS:
                 requested_patches.append(p)
+
+    # Verifye zouti yo byen enstale anvan kòmanse
+    tool_errors = verify_tools()
+    if tool_errors:
+        sys.stdout.write("ERR: Zouti pa byen enstale: %s\n" % "; ".join(tool_errors))
+        sys.exit(1)
 
     if not os.path.exists(apk_in):
         sys.stdout.write("ERR: APK pa jwenn: %s\n" % apk_in)
