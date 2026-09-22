@@ -61,6 +61,21 @@ function startDashboard(sock, state) {
     res.json({ ok: true });
   });
 
+  // Efase sesyon WhatsApp (pou yon pairing/QR frè)
+  app.post('/api/reset', async (req, res) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dir = path.join(__dirname, '..', 'session');
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      res.json({ ok: true, msg: 'Sesyon efase. Bot ap rekonekte ak yon sesyon frè.' });
+    } catch (e) {
+      res.status(500).json({ error: String(e.message) });
+    }
+  });
+
   app.post('/api/pair', async (req, res) => {
     const phone = (req.body.phone || '').replace(/\D/g, '');
     if (!phone || phone.length < 8) {

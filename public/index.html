@@ -120,6 +120,7 @@
     <p class="hint">Antre nimewo WhatsApp (avèk kòd peyi, pa egz. 509xxxxxxxx) pou jwenn yon pairing code — oswa skanne QR a anba a dirèkteman.</p>
     <input id="phone" placeholder="509xxxxxxxx" inputmode="numeric" />
     <button class="btn primary" onclick="pair()">Mande Pairing Code</button>
+    <button class="btn" style="background:#2a3048;color:#fff;width:100%;margin-top:8px;" onclick="resetSession()">🔄 Reyajiste sesyon (logout)</button>
     <div id="pair-result"></div>
     <div class="qr-box" id="qr-box" style="display:none;">
       <img id="qr-img" alt="QR" />
@@ -191,6 +192,13 @@ async function loadGroups() {
 async function toggle(jid) { await fetch(`/api/groups/${jid}/toggle`, {method:'POST'}); loadGroups(); }
 async function remove(jid) { if(confirm('Retire gwoup sa a?')){ await fetch(`/api/groups/${jid}/remove`, {method:'POST'}); loadGroups(); } }
 
+async function resetSession() {
+  const el = $('pair-result');
+  el.innerHTML = '<div class="msg">Ap reyajiste sesyon...</div>';
+  const r = await fetch('/api/reset', {method:'POST'}).then(x=>x.json());
+  el.innerHTML = '<div class="msg ' + (r.ok ? 'ok' : 'err') + '">' + (r.msg || r.error || 'fini') + '</div>';
+  setTimeout(()=>{ loadStatus(); loadQR(); }, 3000);
+}
 async function pair() {
   const phone = $('phone').value;
   const el = $('pair-result');
