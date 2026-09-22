@@ -6,32 +6,31 @@ const { handleMessage } = require('./handler');
 const { startDashboard } = require('./dashboard');
 const config = require('./config');
 
+let state = null;
+
 async function main() {
   console.log('🤖 BaliBuddy WA ap demare...');
 
-  // Chaje eta gwoup yo
-  const state = stateMod.load();
+  state = stateMod.load();
 
-  // Konekte ak WhatsApp
   const sock = await wa.connect();
 
-  // Koute mesaj yo
-  sock.ev.on('messages.upsert', async (m) => {
+  // Koute mesaj atravè wa.on — re-fikse otomatikman sou chak nouvo sokè
+  wa.on('messages.upsert', async (m) => {
     const msg = m.messages?.[0];
     if (!msg || !msg.message) return;
+    const active = wa.getActiveSock() || sock;
     try {
-      await handleMessage(sock, msg, state);
+      await handleMessage(active, msg, state);
     } catch (e) {
       console.error('[index] Erè nan handleMessage:', e.message);
     }
   });
 
-  // Dashboard web
   startDashboard(sock, state);
 
   console.log('✅ BaliBuddy WA pare. Voye /help nan chat la.');
 
-  // Graceful shutdown
   process.on('SIGINT', () => { console.log('Bye.'); process.exit(0); });
   process.on('SIGTERM', () => { console.log('Bye.'); process.exit(0); });
 }
