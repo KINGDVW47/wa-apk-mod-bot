@@ -64,13 +64,27 @@ function startDashboard(sock, state) {
   // Efase sesyon WhatsApp (pou yon pairing/QR frè)
   app.post('/api/reset', async (req, res) => {
     try {
+      // 1. Dekonekte sokè aktyèl la (li lage fichye sesyon yo)
+      const s = wa.getActiveSock();
+      if (s) {
+        try { s.logout(); } catch (_) {}
+        try { s?.ws?.close(); } catch (_) {}
+      }
+      // 2. Efase kontni katab sesyon an (pa katab li menm)
       const fs = require('fs');
       const path = require('path');
       const dir = path.join(__dirname, '..', 'session');
       if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
+        for (const f of fs.readdirSync(dir)) {
+          const fp = path.join(dir, f);
+          try { fs.rmSync(fp, { recursive: true, force: true }); } catch (_) {}
+        }
       }
-      res.json({ ok: true, msg: 'Sesyon efase. Bot ap rekonekte ak yon sesyon frè.' });
+      // 3. Reyajiste eta a
+      wa.setConnState({ status: 'disconnected', phoneNumber: null, name: null, qr: null, pairingCode: null, pairMode: false, error: null });
+      res.json({ ok: true, msg: 'Sesyon efase. Bot ap rekonekte ak yon sesyon frè nan kèk segond.' });
+      // 4. Rekonekte apre yon ti reta
+      setTimeout(() => { wa.connect().catch(e => console.error('[reset] reconnect echwe:', e.message)); }, 2500);
     } catch (e) {
       res.status(500).json({ error: String(e.message) });
     }
