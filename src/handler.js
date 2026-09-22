@@ -90,7 +90,7 @@ async function handleMessage(sock, msg, state) {
   const result = await runModPipeline(tmpIn, normJid(jid), patches);
 
     if (result.ok && result.apkPath && fs.existsSync(result.apkPath)) {
-      await sock.sendMessage(jid, { text: '✅ Mod fini! Men APK mod ou a 👇' });
+      await sock.sendMessage(jid, { text: '✅ Mod fini!' + buildReport(result.summary) + '\nMen APK mod ou a 👇' });
       await sock.sendMessage(jid, {
         document: { url: result.apkPath },
         fileName: path.basename(result.apkPath),
@@ -169,6 +169,25 @@ async function handleCommand(sock, msg, state, text, jid) {
     default:
       await sock.sendMessage(jid, { text: 'Kòmand enkoni. Tape /menu pou wè sa bot la ka fè.' });
   }
+}
+
+function buildReport(summary) {
+  if (!summary) return '';
+  const labels = {
+    plan: 'Plan/VIP', credit: 'Kredi', token: 'Token',
+    lvl: 'LVL', ads: 'Reklam', root: 'Root', signature: 'Siyati',
+  };
+  const rows = [];
+  for (const k of Object.keys(labels)) {
+    const v = summary[k];
+    if (v && typeof v === 'object' && (v.found > 0 || v.patched > 0)) {
+      rows.push('• ' + labels[k] + ': patched ' + v.patched + '/' + v.found);
+    } else if (typeof v === 'number' && v > 0) {
+      rows.push('• ' + labels[k] + ': ' + v + ' lye');
+    }
+  }
+  if (rows.length === 0) return '';
+  return '\n\n🔍 *Plan/Token/Kredi detekte & patch:*\n' + rows.join('\n');
 }
 
 function patchLabel(p) {

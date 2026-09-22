@@ -38,7 +38,13 @@ function runModPipeline(apkPath, uid, patches) {
         const last = lines[lines.length - 1] || '';
         if (last.startsWith('OK:')) {
           const apkPath = last.slice(3).trim();
-          resolve({ ok: true, apkPath, msg: 'siksè' });
+          // Chèche liy SUMMARY:json nan stdout
+          let summary = null;
+          const sumLine = lines.find(l => l.startsWith('SUMMARY:'));
+          if (sumLine) {
+            try { summary = JSON.parse(sumLine.slice('SUMMARY:'.length).trim()); } catch (_) {}
+          }
+          resolve({ ok: true, apkPath, msg: 'siksè', summary });
         } else {
           resolve({ ok: false, msg: (stdout + stderr).replace(/\s+/g, ' ').slice(-800) || 'Mod echwe (rezilta vid).' });
         }

@@ -276,47 +276,46 @@ def _force_return_true(body):
 
 
 def _patch_return(decompiled_dir, names, mode):
-    """Fòse metòd ki matche 'names' pou retounen yon valè fiks.
+    """Fòse tout metòd ki matche 'names' pou retounen yon valè fiks.
 
     mode ∈ {True, False, int}
+    Retounen diksyonè {found, patched} pou rapò detaye.
     """
-    hits = 0
+    found = 0
+    patched = 0
     compiled = re.compile(r"\.method\b[^\n]*\b(" + "|".join(re.escape(n) for n in names) + r")\s*\(")
     for sp in _walk_smali_files(decompiled_dir):
         try:
             content = open(sp, encoding="utf-8").read()
         except Exception:
             continue
-        changed = False
-        for m in list(compiled.finditer(content)):
-            start = m.start()
-            # jwenn fen metòd sa a (.end method)
+        # kolekte tout korespondans (soti nan fen pou endis yo rete valab)
+        matches = []
+        for m in compiled.finditer(content):
             end_m = content.find(".end method", m.end())
             if end_m == -1:
                 continue
-            end = end_m + len(".end method")
-            # liy header a (liy ki kòmanse ak .method ...)
             line_end = content.find("\n", m.start())
             header = content[m.start():line_end if line_end != -1 else m.end()]
-            # Detèmine kalite retou apati deskriptè: '( ... )<retou>'
-            rtype = None
             mm = re.search(r"\)([^\s;]+)", header)
-            if mm:
-                rtype = mm.group(1)
-            if mode is True and rtype != "Z":
+            rtype = mm.group(1) if mm else None
+            # Detèmine si rtype a matche 'mode'
+            ok = False
+            if mode is True and rtype == "Z":
+                ok = True
+            elif mode is False and rtype == "Z":
+                ok = True
+            elif (mode is not True and mode is not False) and rtype == "I":
+                ok = True
+            if not ok:
                 continue
-            if mode is False and rtype != "Z":
-                continue
-            if (mode is not True and mode is not False) and rtype != "I":
-                continue
-            regs = re.search(r"\.registers\s+(\d+)", content[start:end])
-            nreg = int(regs.group(1)) if regs else 1
-            # bati nouvo kò (kenbe header antye, sèlman ranplase kò a)
-            # Header deja kòmanse nan 'start'; nou vle chanje soti nan fen header
-            # rive nan '.end method'.
-            body_start = start
-            body_end = end_m  # '.end method' (nou kite li)
-            # konstwi nouvo kò (ant header ak .end method)
+            found += 1
+            matches.append((m.start(), end_m, m.end(), mode))
+        # Aplike patch yo (soti nan dènye → premye pou endis pa deplase)
+        matches.sort(key=lambda x: -x[0])
+        for start, end_m, m_end, mode in matches:
+            line_end = content.find("\n", start)
+            # bati nouvo kò
             if mode is True:
                 body = "\n    const/4 v0, 0x1\n    return v0\n"
             elif mode is False:
@@ -324,17 +323,14 @@ def _patch_return(decompiled_dir, names, mode):
             else:
                 val = int(mode)
                 body = "\n    const v0, 0x%x\n    return v0\n" % val
-            # Asire .registers oswa .locals nan header (deja la); nou pa touche header.
-            content = content[:line_end if line_end != -1 else m.end()] + body + content[end_m:]
-            hits += 1
-            changed = True
-            break  # sèlman yon metòd pa fwa pou senplisite
-        if changed:
+            content = content[:line_end if line_end != -1 else m_end] + body + content[end_m:]
+            patched += 1
+        if matches:
             try:
                 open(sp, "w", encoding="utf-8").write(content)
             except Exception:
                 pass
-    return hits
+    return {"found": found, "patched": patched}
 
 
 def _patch_lvl(decompiled_dir):
@@ -480,8 +476,19 @@ def main():
             sys.stdout.write("ERR: Siyati echwe: %s\n" % err.strip()[-500:])
             sys.exit(8)
 
-        # Rezime patch sou dènye liy (apre OK pèdi — se konsa nou ekri yon blòk enfòmasyon)
-        sys.stdout.write("PATCHES:%s\n" % str(patch_results))
+        # Rezime patch: liy espesyal ke modbridge.js li pou fè yon rapò klè
+        # Fòma: SUMMARY:json
+        summary = {
+            "plan": patch_results.get("plan", 0),
+            "credit": patch_results.get("credit", 0),
+            "token": patch_results.get("token", 0),
+            "lvl": patch_results.get("lvl", 0),
+            "ads": patch_results.get("ads", 0),
+            "root": patch_results.get("root", 0),
+            "signature": patch_results.get("signature", 0),
+        }
+        import json as _json
+        sys.stdout.write("SUMMARY:%s\n" % _json.dumps(summary))
         sys.stdout.write("OK:%s\n" % final)
     finally:
         shutil.rmtree(work, ignore_errors=True)
