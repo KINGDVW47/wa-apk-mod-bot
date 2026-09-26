@@ -23,6 +23,7 @@ RUN mkdir -p ${BUILD_TOOLS_DIR} && \
     unzip -q /tmp/bt.zip -d /tmp/bt && \
     cp /tmp/bt/android-14/aapt /tmp/bt/android-14/aapt2 /tmp/bt/android-14/zipalign /tmp/bt/android-14/apksigner ${BUILD_TOOLS_DIR}/ && \
     cp -r /tmp/bt/android-14/lib64 ${BUILD_TOOLS_DIR}/ && \
+    cp -r /tmp/bt/android-14/lib ${BUILD_TOOLS_DIR}/ && \
     rm -rf /tmp/bt /tmp/bt.zip
 
 # ---- apktool (pou telechaje yon .jar valab, verifye li) ----

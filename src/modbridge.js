@@ -24,7 +24,14 @@ function runModPipeline(apkPath, uid, patches) {
     }
 
     execFile('python3', args,
-      { timeout: 25 * 60 * 1000, maxBuffer: 1024 * 1024 * 20 },
+      {
+        timeout: 25 * 60 * 1000,
+        maxBuffer: 1024 * 1024 * 20,
+        env: {
+          ...process.env,
+          UNLOCK_PROXY_HOST: config.UNLOCK_PROXY_HOST || '',
+        },
+      },
       (err, stdout, stderr) => {
         if (err) {
           // Timeout oswa erè. mod_apk.py ekri "ERR: ..." sou STDOUT,

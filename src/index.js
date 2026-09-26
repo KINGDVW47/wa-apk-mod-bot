@@ -4,6 +4,7 @@ const stateMod = require('./state');
 const wa = require('./wa');
 const { handleMessage } = require('./handler');
 const { startDashboard } = require('./dashboard');
+const { startUnlockProxy } = require('./unlockproxy');
 const config = require('./config');
 
 let state = null;
@@ -28,6 +29,10 @@ async function main() {
   });
 
   startDashboard(sock, state);
+
+  // Sèvè proxy deblokaj (Approach A) — pò separe (Railway ekspoze li kòm 8080)
+  const unlockPort = process.env.UNLOCK_PROXY_PORT || 8080;
+  startUnlockProxy(unlockPort);
 
   console.log('✅ BaliBuddy WA pare. Voye /help nan chat la.');
 

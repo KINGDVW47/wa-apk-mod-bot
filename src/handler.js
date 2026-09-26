@@ -13,13 +13,13 @@ const WORK_ROOT = '/tmp/wamod';
 
 function normJid(jid) { return (jid || '').split('@')[0]; }
 
-const ALL_PATCHES = ['plan', 'credit', 'token', 'lvl', 'ads', 'root', 'signature'];
+const ALL_PATCHES = ['plan', 'credit', 'token', 'unlock', 'lvl', 'ads', 'root', 'signature'];
 
 // Konfigirasyon patch pou chak gwoup (default: tout aktif)
 function getGroupPatches(state, jid) {
   const g = state.activatedGroups[jid];
   if (g && g.patches) return { ...g.patches };
-  return { plan: true, credit: true, token: true, lvl: true, ads: true, root: true, signature: true };
+  return { plan: true, credit: true, token: true, unlock: true, lvl: true, ads: true, root: true, signature: true };
 }
 
 function setGroupPatch(state, jid, patch, val) {
@@ -186,6 +186,22 @@ function buildReport(summary) {
       rows.push('• ' + labels[k] + ': ' + v + ' lye');
     }
   }
+  // Deblokaj jenerik (Approach A/B) — rapò detaye
+  if (summary.unlock && typeof summary.unlock === 'object') {
+    const u = summary.unlock;
+    if (u.patched > 0) {
+      rows.push('• Deblokaj sevè/JS (unlock): patched ' + u.patched + '/' + u.found);
+    }
+    if (u.detect && typeof u.detect === 'object') {
+      const d = u.detect;
+      if (d.react_native_js) rows.push('   ↳ App React Native (JS bundle) detekte');
+      if (d.api_hosts && d.api_hosts.length) rows.push('   ↳ Sevè abònman: ' + d.api_hosts.join(', '));
+      if (d.tier_constants && d.tier_constants.length) rows.push('   ↳ Tier/kwota jwenn: ' + d.tier_constants.slice(0, 5).join(', ') + (d.tier_constants.length > 5 ? '…' : ''));
+    }
+    if (u.warnings && u.warnings.length) {
+      rows.push('   ⚠️ ' + u.warnings[0]);
+    }
+  }
   if (rows.length === 0) return '';
   return '\n\n🔍 *Plan/Token/Kredi detekte & patch:*\n' + rows.join('\n');
 }
@@ -193,6 +209,7 @@ function buildReport(summary) {
 function patchLabel(p) {
   const map = {
     plan: 'Plan/VIP/Premium', credit: 'Kredi/Balance', token: 'Token',
+    unlock: 'Deblokaj jenerik (sevè+JS)',
     lvl: 'LVL (lisans Google)', ads: 'Reklam (ads)', root: 'Root check', signature: 'Siyati',
   };
   return map[p] || p;
@@ -242,7 +259,7 @@ const MENU_TEXT = `🤖 *BaliBuddy WA* — bot mod APK
 🔧 Dekonpile nenpòt APK
 ✏️ Chanje non aplikasyon an
 📢 Enjekte Toast (mesaj) nan launcher
-🔐 Patch opsyonèl (LVL, ads, root, siyati, plan/credit/token)
+🔐 Patch opsyonèl (LVL, ads, root, siyati, plan/credit/token, deblokaj sevè/JS)
 📦 Rebuild + siyati + voye APK mod tounen
 
 *Kòmand:*
@@ -250,7 +267,7 @@ const MENU_TEXT = `🤖 *BaliBuddy WA* — bot mod APK
 /dezaktive — dezaktive bot nan grup sa a
 /estati — wè eta koneksyon
 /ls — lis gwoup aktif
-/patch — aktive/dezaktive patch (plan, kredi, token, lvl, ads, root, siyati)
+/patch — aktive/dezaktive patch (plan, kredi, token, unlock, lvl, ads, root, siyati)
 /menu (oswa /help) — montre meni sa a
 
 *Kijan pou mod:*

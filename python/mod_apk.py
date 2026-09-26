@@ -24,6 +24,12 @@ import shutil
 import subprocess
 import tempfile
 
+# Motè deblokaj jenerik (JS bundle + hôte API + deteksyon)
+try:
+    import unlock
+except ImportError:
+    unlock = None
+
 # =============================================================================
 # Konfigirasyon
 # =============================================================================
@@ -34,6 +40,10 @@ APKSIGNER = "apksigner"
 KEYSTORE_PATH = os.environ.get("KEYSTORE_PATH", "/keys/release.keystore")
 KEYSTORE_ALIAS = os.environ.get("KEYSTORE_ALIAS", "modbot")
 KEYSTORE_PASS = os.environ.get("KEYSTORE_PASS", "android")
+
+# Hôte proxy deblokaj (se bot la li menm ki aji kòm sevè deblokaj)
+# Si vid, nou pa reekri hôte API; nou fòse sèlman lokalman.
+_PROXY_HOST = os.environ.get("UNLOCK_PROXY_HOST", "")
 
 
 # =============================================================================
@@ -382,6 +392,34 @@ def _patch_ads(decompiled_dir):
     return hits
 
 
+def _patch_unlock(decompiled_dir, proxy_host=None):
+    """Deblokaj jenerik: patch JS bundle + hôte API (React Native / sevè-valide).
+
+    Retounen diksyonè {found, patched} konbine kòd smali ak JS bundle.
+    """
+    res = {"found": 0, "patched": 0, "js": None, "smali_host": None, "detect": None, "warnings": []}
+    if unlock is None:
+        return res
+    try:
+        # Deteksyon (ki sa ki genyen)
+        res["detect"] = unlock.detect_unlockables(decompiled_dir)
+        # Patch JS bundle (React Native / Hermes)
+        js = unlock.patch_js_bundle(decompiled_dir, proxy_host=proxy_host)
+        res["js"] = js
+        res["found"] += js.get("found", 0)
+        res["patched"] += js.get("patched", 0)
+        if js.get("warnings"):
+            res["warnings"] += js["warnings"]
+        # Patch hôte API nan smali (app natif)
+        smali_host = unlock.patch_api_host_in_smali(decompiled_dir, proxy_host=proxy_host)
+        res["smali_host"] = smali_host
+        res["found"] += smali_host.get("found", 0)
+        res["patched"] += smali_host.get("patched", 0)
+    except Exception as e:
+        res["err"] = str(e)
+    return res
+
+
 PATCH_FUNCS = {
     "plan": lambda d: _patch_return(d, RETURN_PATTERNS["plan"]["names"], True),
     "credit": lambda d: _patch_return(d, RETURN_PATTERNS["credit"]["names"], RETURN_PATTERNS["credit"]["value"]),
@@ -390,6 +428,7 @@ PATCH_FUNCS = {
     "signature": lambda d: _patch_return(d, RETURN_PATTERNS["signature"]["names"], True),
     "lvl": _patch_lvl,
     "ads": _patch_ads,
+    "unlock": lambda d: _patch_unlock(d, proxy_host=_PROXY_HOST),
 }
 
 
@@ -427,11 +466,14 @@ def main():
 
     # Lis patch mande
     requested_patches = []
+    global _PROXY_HOST
     for a in sys.argv[4:]:
         if a.startswith("--patch="):
             p = a[len("--patch="):].strip().lower()
             if p in PATCH_FUNCS:
                 requested_patches.append(p)
+        elif a.startswith("--proxy-host="):
+            _PROXY_HOST = a[len("--proxy-host="):].strip()
 
     # Verifye zouti yo byen enstale anvan kòmanse
     tool_errors = verify_tools()
@@ -512,6 +554,7 @@ def main():
             "ads": patch_results.get("ads", 0),
             "root": patch_results.get("root", 0),
             "signature": patch_results.get("signature", 0),
+            "unlock": patch_results.get("unlock", None),
         }
         import json as _json
         sys.stdout.write("SUMMARY:%s\n" % _json.dumps(summary))
